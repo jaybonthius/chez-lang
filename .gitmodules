@@ -1,0 +1,4 @@
+[submodule "tests/chez"]
+	path = tests/chez
+	url = https://github.com/cisco/ChezScheme.git
+	shallow = true

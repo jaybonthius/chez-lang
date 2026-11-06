@@ -9,6 +9,7 @@
     readtable-dispatch-handler
 
     read-mode
+    read-mode?
     make-reader
     make-annotating-reader
     reader?

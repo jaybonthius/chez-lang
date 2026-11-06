@@ -4,10 +4,11 @@ TEST_TIMEOUT ?= 600
 LONG_TIMEOUT ?= 1700
 
 OBJ := build/obj
-RUN := $(SCHEME) -q --libdirs src::$(OBJ)/src --program
+RUN := $(SCHEME) -q --libdirs src::$(OBJ)/src:tests/lib --program
 TESTS := $(sort $(wildcard tests/*-test.sps))
+SCRIPT_TESTS := $(sort $(wildcard tests/*-test.sh))
 
-export CHEZ_SRC
+export CHEZ_SRC SCHEME
 
 .PHONY: build test corpus-test error-test exhaustive-test bench clean
 
@@ -18,6 +19,10 @@ test: build
 	@set -e; for t in $(TESTS); do \
 	  echo "$$t"; \
 	  timeout $(TEST_TIMEOUT) $(RUN) $(OBJ)/$${t%.sps}.so; \
+	done; \
+	for t in $(SCRIPT_TESTS); do \
+	  echo "$$t"; \
+	  timeout $(TEST_TIMEOUT) sh $$t; \
 	done
 
 corpus-test: build

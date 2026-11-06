@@ -1,6 +1,9 @@
 #!chezscheme
 (define-enumeration read-mode (chez r6rs) read-modes)
 
+(define (read-mode? x)
+  (and (symbol? x) (enum-set-member? x (enum-set-universe (read-modes)))))
+
 (define-record-type (reader new-reader reader?)
   (nongenerative)
   (sealed #t)

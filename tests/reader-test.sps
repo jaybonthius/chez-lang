@@ -178,6 +178,11 @@
 (check "readtable-dispatch-handler" #f (readtable-dispatch-handler up-readtable #\^))
 (check "make-reader needs a mode" #t
   (assertion? (lambda () (make-reader (open-input-string "") default-readtable 'scheme))))
+(check "make-reader names itself for a mode that is not a symbol" 'make-reader
+  (guard (c [(assertion-violation? c) (condition-who c)])
+    (make-reader (open-input-string "") default-readtable 3)))
+(check "read-mode?" '(#t #t #f #f)
+  (map read-mode? (list (read-mode chez) (read-mode r6rs) 'scheme 3)))
 (check "make-reader needs a textual port" #t
   (assertion? (lambda () (make-reader (open-bytevector-input-port #vu8()) default-readtable (read-mode chez)))))
 (check "annotating reader needs a port it can reposition" #t

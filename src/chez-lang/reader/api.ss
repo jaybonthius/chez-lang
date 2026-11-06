@@ -15,7 +15,7 @@
   (unless (readtable? rt) (assertion-violationf who "~s is not a readtable" rt)))
 
 (define (check-mode who mode)
-  (unless (enum-set-member? mode (enum-set-universe (read-modes)))
+  (unless (read-mode? mode)
     (assertion-violationf who "~s is not a read mode" mode)))
 
 (define (check-position who pos)

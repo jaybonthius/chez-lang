@@ -14,6 +14,9 @@
        (filter (lambda (name) (equal? (path-extension name) "ss"))
                (sort string<? (directory-list source-dir)))))
 
+(when (null? files)
+  (errorf 'bench "no source files under ~a" source-dir))
+
 ;; After a datum with a graph mark both readers walk the whole datum, which
 ;; is most of Chez's time on those files, so they are also left out.
 (define (has-mark? text)

@@ -53,12 +53,14 @@
 
 (define (run mode)
   (set! errors-compared 0)
-  (let* ([files (corpus-files)]
-         [differences (filter values (map (lambda (path) (file-difference path mode)) files))])
-    (printf "~a mode: ~a files, ~a ending in a reader error\n" mode (length files) errors-compared)
-    (for-each (lambda (d) (parameterize ([print-length 8] [print-level 5]) (printf "  ~s\n" d)))
-              differences)
-    (length differences)))
+  (let ([files (corpus-files)])
+    (when (null? files)
+      (errorf 'corpus-test "no source files under ~a" chez-src))
+    (let ([differences (filter values (map (lambda (path) (file-difference path mode)) files))])
+      (printf "~a mode: ~a files, ~a ending in a reader error\n" mode (length files) errors-compared)
+      (for-each (lambda (d) (parameterize ([print-length 8] [print-level 5]) (printf "  ~s\n" d)))
+                differences)
+      (length differences))))
 
 (let ([differences (+ (run 'chez) (run 'r6rs))])
   (printf "corpus-test: ~a differences\n" differences)

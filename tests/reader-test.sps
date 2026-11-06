@@ -152,7 +152,24 @@
     (eq? x (vector-ref (cadr x) 0))))
 (check "annotated handler embeds an unresolved reference" #t
   (let ([x (annotation-expression (car (read-annotated "#0=(a ^#0#)" vector-readtable)))])
-    (eq? x (annotation-expression (vector-ref (cadr x) 0)))))
+    (eq? x (annotation-expression (vector-ref (annotation-expression (cadr x)) 0)))))
+(check "reader-annotate annotates the lists a handler builds" '(#t #t #t (quote (changed x)))
+  (let* ([rt (readtable-extend-datum-start default-readtable #\$
+               (lambda (r c start)
+                 (reader-annotate r (list 'quote (list 'changed (reader-read r))) start)))]
+         [a (car (read-annotated "$x" rt))]
+         [inner (cadr (annotation-expression a))])
+    (list (annotation? inner)
+          (annotation? (car (annotation-expression inner)))
+          (equal? (map (lambda (s) (list (source-object-bfp s) (source-object-efp s)))
+                       (list (annotation-source inner) (annotation-source a)))
+                  '((0 2) (0 2)))
+          (annotation-stripped a))))
+(check "a handler's unannotated result is annotated" '(#t (a (quote x)))
+  (let* ([rt (readtable-extend-datum-start default-readtable #\$
+               (lambda (r c start) (list 'quote (reader-read r))))]
+         [a (car (read-annotated "(a $x)" rt))])
+    (list (annotation? (cadr (annotation-expression a))) (annotation-stripped a))))
 (check "annotated mark through a handler is shared" #t
   (let* ([a (car (read-annotated "#0=(a ^#0#)" up-readtable))]
          [x (annotation-expression a)]

@@ -6,7 +6,11 @@
 
 (define (read-datum r type value bfp efp)
   (case type
-    [(datum) (values value (datum-stripped value) efp)]
+    [(datum)
+     (if (reader-sfd r)
+         (let ([a (annotate-built r value bfp efp)])
+           (values a (datum-stripped a) efp))
+         (values value (datum-stripped value) efp))]
     [(record-brack) (read-record r bfp)]
     [else
      (let-values ([(x stripped end) (read-datum-body r type value bfp efp)])

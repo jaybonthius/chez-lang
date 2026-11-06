@@ -283,5 +283,61 @@ printf '#!test/plain\n(library (pages short) (export))\n' > lib/pages/short.sls
 expect_error "plain library without an import clause" "((pages short))" 0 \
   'Exception in compile-lang-library: expected (library name (export ...) (import ...) body ...) (library (pages short) (export)) at line 2, char 1 of lib/pages/short.sls'
 
+cat > typed.sps <<'EOF'
+(import (chezscheme) (chez-lang language) (chez-lang loader))
+(install-loader!)
+(define (argument i) (read (open-input-string (list-ref (command-line-arguments) i))))
+(guard (c [(language-error? c) (display "&language-error ") (display-condition c) (newline) (exit 1)])
+  (call-with-library-lock (lambda () (eval `(let () (import ,(argument 0)) 0)))))
+EOF
+expect_cycle() {
+  if output=$(timeout 60 "$scheme" -q --libdirs src:lib --compile-imported-libraries --program typed.sps "$2" 2>&1); then
+    fail "$1: import succeeded"
+  else
+    output=$(printf '%s\n' "$output" | tail -n 1)
+    [ "$output" = "$3" ] || fail "$1: expected $3, got $output"
+  fi
+}
+
+mkdir lib/cyc
+cat > lib/cyc/lang.sls <<'EOF'
+(library (cyc lang)
+  (export language)
+  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (define language (make-s-exp-language default-readtable (read-mode chez) '((cyc)) 'doc-begin)))
+EOF
+printf '#!cyc\n1\n' > lib/cyc.sls
+expect_cycle "page that is its language's module language" "(cyc)" \
+  '&language-error Exception in compile-lang-library: language cyc depends on the page lib/cyc.sls being compiled'
+cat > refix.sps <<'EOF'
+(import (chezscheme) (chez-lang language) (chez-lang loader))
+(install-loader!)
+(define (import-cyc)
+  (call-with-library-lock (lambda () (eval '(let () (import (cyc)) doc)))))
+(guard (c [(language-error? c) #t]) (import-cyc))
+(call-with-output-file "lib/cyc.sls" (lambda (p) (display "#!test/doc\n\"fixed\"\n" p)) 'replace)
+(guard (c [#t (display-condition c) (newline) (exit 1)])
+  (write (import-cyc)))
+EOF
+output=$(timeout 60 "$scheme" -q --libdirs src:lib --compile-imported-libraries --program refix.sps 2>&1 | tail -n 1)
+[ "$output" = '("fixed")' ] || fail "page fixed after a cycle error, in the same process: got $output"
+printf '#!cyc\n1\n' > lib/cyc.sls
+mkdir lib/self
+printf '#!self\n1\n' > lib/self/lang.sls
+expect_cycle "language library in its own language" "(self lang)" \
+  '&language-error Exception in read-language: language self depends on itself through library (self lang) "self" at line 1, char 3 of lib/self/lang.sls'
+
+mkdir lib/m8 lib/p8
+cat > lib/m8/lang.sls <<'EOF'
+(library (m8 lang)
+  (export language)
+  (import (chezscheme) (chez-lang language))
+  (define language
+    (make-meta-language (lambda (readtable) (eval '(let () (import (p8 page)) 0)) readtable))))
+EOF
+printf '#!m8 test/doc\n1\n' > lib/p8/page.sls
+expect_cycle "meta-language extension that imports a page in its language" "(p8 page)" \
+  '&language-error Exception in read-language: language m8 depends on itself through library (m8 lang) "m8" at line 1, char 3 of lib/p8/page.sls'
+
 echo "loader-test: $failures failures"
 [ "$failures" -eq 0 ]

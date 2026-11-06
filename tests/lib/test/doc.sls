@@ -1,9 +1,18 @@
 (library (test doc)
-  (export doc-begin up)
+  (export doc-begin up define-meta)
   (import (chezscheme) (chez-lang body))
   (export (import (chezscheme)))
 
   (define (up x) (list 'up x))
+
+  ;; The page's metas part reads these forms; the page itself ignores them.
+  (define-syntax define-meta
+    (lambda (x)
+      (syntax-case x ()
+        [(_ key value) (identifier? #'key) #'(begin)]
+        [_ (syntax-violation 'define-meta "expected (define-meta key value)" x)])))
+
+  (define-property define-meta definer (lambda (form) '()))
 
   ;; doc is captured from the doc-begin keyword, which the loader writes in
   ;; the page's context, so the page and its importers see it.

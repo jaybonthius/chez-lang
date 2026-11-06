@@ -105,46 +105,65 @@
     (let ([x (read-next r)])
       (if (eof-object? x) '() (cons x (loop))))))
 
-(define (strip x)
-  (if (or (pair? x) (vector? x) (box? x))
-      (strip-shared x)
-      (datum-stripped x)))
-
-;; A handler's datum may share structure or be cyclic, so each node is
-;; copied once.
-(define (strip-shared x)
-  (let ([copies (make-eq-hashtable)])
-    (let walk ([x x])
-      (cond
-        [(annotation? x) (annotation-stripped x)]
-        [(pending-annotation? x) (pending-annotation-stripped x)]
-        [(pair? x)
-         (or (hashtable-ref copies x #f)
-             (let ([copy (cons #f #f)])
-               (hashtable-set! copies x copy)
-               (set-car! copy (walk (car x)))
-               (set-cdr! copy (walk (cdr x)))
-               copy))]
-        [(vector? x)
-         (or (hashtable-ref copies x #f)
-             (let ([copy (make-vector (vector-length x))])
-               (hashtable-set! copies x copy)
-               (do ([i 0 (fx+ i 1)]) ((fx= i (vector-length x)) copy)
-                 (vector-set! copy i (walk (vector-ref x i))))))]
-        [(box? x)
-         (or (hashtable-ref copies x #f)
-             (let ([copy (box #f)])
-               (hashtable-set! copies x copy)
-               (set-box! copy (walk (unbox x)))
-               copy))]
-        [else x]))))
+;; Chez's expander strips an annotation only from an annotated list or one
+;; whose first element is annotated, so a plain list a handler builds around
+;; a datum it read would carry that datum's annotation into quoted data. A
+;; handler's datum may share structure or be cyclic, so each node is copied
+;; once.
+(define (annotate-built r x start end)
+  (define done (make-eq-hashtable))
+  (define (fill-pair! x e s)
+    (let-values ([(ea sa) (walk (car x))])
+      (set-car! e ea)
+      (set-car! s sa))
+    (let-values ([(ed sd) (walk-tail (cdr x))])
+      (set-cdr! e ed)
+      (set-cdr! s sd)))
+  (define (walk x)
+    (cond
+      [(or (annotation? x) (unresolved? x)) (values x (datum-stripped x))]
+      [(eq-hashtable-ref done x #f) => (lambda (copy) (values (car copy) (cdr copy)))]
+      [(pair? x)
+       (let* ([e (cons #f #f)] [s (cons #f #f)] [a (annotate r e s start end)])
+         (eq-hashtable-set! done x (cons a s))
+         (fill-pair! x e s)
+         (values a s))]
+      [(vector? x)
+       (let* ([n (vector-length x)] [e (make-vector n)] [s (make-vector n)]
+              [a (annotate r e s start end)])
+         (eq-hashtable-set! done x (cons a s))
+         (do ([i 0 (fx+ i 1)]) ((fx= i n))
+           (let-values ([(ei si) (walk (vector-ref x i))])
+             (vector-set! e i ei)
+             (vector-set! s i si)))
+         (values a s))]
+      [(box? x)
+       (let* ([e (box #f)] [s (box #f)] [a (annotate r e s start end)])
+         (eq-hashtable-set! done x (cons a s))
+         (let-values ([(eb sb) (walk (unbox x))])
+           (set-box! e eb)
+           (set-box! s sb))
+         (values a s))]
+      [else (values (annotate r x x start end) x)]))
+  ;; Chez's reader annotates a list, not each pair after its first.
+  (define (walk-tail x)
+    (cond
+      [(null? x) (values '() '())]
+      [(and (pair? x) (not (eq-hashtable-contains? done x)))
+       (let ([e (cons #f #f)] [s (cons #f #f)])
+         (eq-hashtable-set! done x (cons e s))
+         (fill-pair! x e s)
+         (values e s))]
+      [else (walk x)]))
+  (let-values ([(a s) (walk x)])
+    a))
 
 (define (reader-annotate r datum start)
   (define who 'reader-annotate)
   (check-reader who r)
   (check-position who start)
   (if (reader-sfd r)
-      (annotate r datum (strip datum) start (port-position (reader-port r)))
+      (annotate-built r datum start (port-position (reader-port r)))
       datum))
 
 (define (reader-error r start message . irritants)

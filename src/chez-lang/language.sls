@@ -3,8 +3,11 @@
     make-s-exp-language
     make-parser-language
     make-plain-language
+    make-meta-language
+    language-with-part
     language-with-lexer
     language?
+    meta-language?
     language-name
     language-libraries
     language-readtable
@@ -32,6 +35,17 @@
     (nongenerative)
     (sealed #t)
     (fields name libraries readtable mode parser imports body-macro parts lexer))
+
+  (define-record-type meta-language
+    (nongenerative)
+    (sealed #t)
+    (fields extend)
+    (protocol
+      (lambda (new)
+        (lambda (extend)
+          (unless (procedure? extend)
+            (assertion-violationf 'make-meta-language "~s is not a procedure" extend))
+          (new extend)))))
 
   (define-condition-type &language-error &error
     make-language-error language-error?
@@ -86,19 +100,31 @@
     (check-mode who mode)
     (make-language #f '() readtable mode #f '() #f '() #f))
 
-  (define (copy-language language name libraries lexer)
-    (make-language name libraries
-      (language-readtable language)
+  (define (copy-language language name libraries readtable parts lexer)
+    (make-language name libraries readtable
       (language-mode language)
       (language-parser language)
       (language-imports language)
       (language-body-macro language)
-      (language-parts language)
+      parts
       lexer))
+
+  (define (language-with-part language part generate)
+    (define who 'language-with-part)
+    (check-language who language)
+    (unless (symbol? part) (assertion-violationf who "~s is not a symbol" part))
+    (when (assq part (language-parts language))
+      (assertion-violationf who "the language already has a part ~s" part))
+    (unless (procedure? generate) (assertion-violationf who "~s is not a procedure" generate))
+    (copy-language language (language-name language) (language-libraries language)
+      (language-readtable language)
+      (append (language-parts language) (list (cons part generate)))
+      (language-lexer language)))
 
   (define (language-with-lexer language lexer)
     (check-language 'language-with-lexer language)
-    (copy-language language (language-name language) (language-libraries language) lexer))
+    (copy-language language (language-name language) (language-libraries language)
+      (language-readtable language) (language-parts language) lexer))
 
   (define (name-char? c)
     (and (char? c)
@@ -164,30 +190,43 @@
              (name-start? (peek-char port))
              (not (member (read-name port) chez-directives))))))
 
-  (define (read-language-name who port sfd)
-    (define (fail bfp efp excerpt message . irritants)
-      (apply raise-read-error who sfd bfp efp excerpt message irritants))
+  (define (read-language-opening who port sfd)
     (let* ([start (port-position port)]
            [opening (get-string-n port 2)]
            [name-start (port-position port)])
       (unless (equal? opening "#!")
-        (fail start name-start (if (eof-object? opening) "" opening) "missing language line"))
+        (raise-read-error who sfd start name-start (if (eof-object? opening) "" opening)
+          "missing language line"))
       (unless (name-start? (peek-char port))
-        (fail start name-start opening "missing language name after #!"))
-      (let* ([name (read-name port)] [name-end (port-position port)])
-        (cond
-          [(directive-prefix name)
-           => (lambda (directive)
-                (if (string=? directive name)
-                    (fail name-start name-end name "#!~a is a Chez Scheme directive, not a language" name)
-                    (fail name-start name-end name "language name ~a starts with the Chez Scheme directive #!~a" name directive)))])
-        (let ([c (peek-char port)])
-          (unless (name-end? c)
-            (read-char port)
-            (fail name-end (port-position port) (string c) "invalid character ~s in language name" c)))
-        (when (member "" (name-segments name))
-          (fail name-start name-end name "empty segment in language name ~a" name))
-        (values name name-start name-end))))
+        (raise-read-error who sfd start name-start opening "missing language name after #!"))))
+
+  (define (read-language-name who port sfd)
+    (define (fail bfp efp excerpt message . irritants)
+      (apply raise-read-error who sfd bfp efp excerpt message irritants))
+    (let* ([name-start (port-position port)] [name (read-name port)] [name-end (port-position port)])
+      (cond
+        [(directive-prefix name)
+         => (lambda (directive)
+              (if (string=? directive name)
+                  (fail name-start name-end name "#!~a is a Chez Scheme directive, not a language" name)
+                  (fail name-start name-end name "language name ~a starts with the Chez Scheme directive #!~a" name directive)))])
+      (let ([c (peek-char port)])
+        (unless (name-end? c)
+          (read-char port)
+          (fail name-end (port-position port) (string c) "invalid character ~s in language name" c)))
+      (when (member "" (name-segments name))
+        (fail name-start name-end name "empty segment in language name ~a" name))
+      (values name name-start name-end)))
+
+  (define (skip-to-base-name who port sfd meta-name)
+    (let skip-blanks ()
+      (when (memv (peek-char port) '(#\space #\tab))
+        (read-char port)
+        (skip-blanks)))
+    (unless (name-start? (peek-char port))
+      (let ([position (port-position port)])
+        (raise-read-error who sfd position position ""
+          "missing language name after meta-language ~a" meta-name))))
 
   (define (raise-language-error who name sfd start end message . irritants)
     (raise
@@ -202,7 +241,15 @@
               (make-annotation name ((current-make-source-object) sfd start end) name))
             (condition)))))
 
+  ;; A language library that needs, while it loads or extends a readtable,
+  ;; a file in its own language would compile that file again and again
+  ;; until memory ran out.
+  (define libraries-loading (make-thread-parameter '()))
+
   (define (load-language who name library sfd start end)
+    (when (member library (libraries-loading))
+      (raise-language-error who name sfd start end
+        "language ~a depends on itself through library ~s" name library))
     (call-with-library-lock
       (lambda ()
         (let-values ([(src obj found?)
@@ -210,22 +257,48 @@
           (unless (or src found? (member library (library-list)))
             (raise-language-error who name sfd start end
               "unknown language ~a: library ~s not found" name library)))
-        (let* ([env (environment `(library ,library))]
+        (let* ([env (parameterize ([libraries-loading (cons library (libraries-loading))])
+                      (environment `(library ,library)))]
                [language (and (memq 'language (library-exports library))
                               (eval 'language env))])
-          (unless (language? language)
+          (unless (or (language? language) (meta-language? language))
             (raise-language-error who name sfd start end
               "library ~s does not export a language" library))
           language))))
+
+  (define (read-language-chain who port sfd extending-meta-name)
+    (let-values ([(name start end) (read-language-name who port sfd)])
+      (let* ([library (name->library name)]
+             [language (load-language who name library sfd start end)])
+        (cond
+          [(meta-language? language)
+           (skip-to-base-name who port sfd name)
+           (let* ([base (read-language-chain who port sfd name)]
+                  [readtable (parameterize ([libraries-loading (cons library (libraries-loading))])
+                               ((meta-language-extend language) (language-readtable base)))])
+             (unless (readtable? readtable)
+               (assertion-violationf who "the meta-language ~a returned ~s, not a readtable"
+                 name readtable))
+             (copy-language base
+               (string-append name " " (language-name base))
+               (cons library (language-libraries base))
+               readtable
+               (language-parts base)
+               (language-lexer base)))]
+          [else
+           (when (and extending-meta-name (not (language-readtable language)))
+             (raise-language-error who name sfd start end
+               "language ~a reads with its own parser and cannot be extended by ~a"
+               name extending-meta-name))
+           (copy-language language name (list library) (language-readtable language)
+             (language-parts language) (language-lexer language))]))))
 
   (define (read-language port sfd)
     (define who 'read-language)
     (check-port who port)
     (check-sfd who sfd)
-    (let-values ([(name start end) (read-language-name who port sfd)])
-      (let* ([library (name->library name)]
-             [language (load-language who name library sfd start end)])
-        (copy-language language name (list library) (language-lexer language)))))
+    (read-language-opening who port sfd)
+    (read-language-chain who port sfd #f))
 
   (define (read-language-forms language port sfd)
     (define who 'read-language-forms)

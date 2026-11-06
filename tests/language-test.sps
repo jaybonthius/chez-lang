@@ -258,6 +258,163 @@
 (check "read-lang-file needs a path" 'read-lang-file
   (assertion-of (lambda () (read-lang-file 'x))))
 
+(eval '(library (test dollar lang)
+         (export language)
+         (import (chezscheme) (chez-lang reader) (chez-lang language))
+         (define (tagger tag)
+           (lambda (r char start) (reader-annotate r (list tag (reader-read r)) start)))
+         (define language
+           (make-meta-language
+             (lambda (readtable)
+               (readtable-extend-datum-start
+                 (readtable-extend-datum-start readtable #\$ (tagger 'dollar))
+                 #\% (tagger 'percent)))))))
+(eval '(library (test broken lang)
+         (export language)
+         (import (chezscheme) (chez-lang language))
+         (define language (make-meta-language (lambda (readtable) 'broken)))))
+(eval '(library (test lexed lang)
+         (export language)
+         (import (chezscheme) (chez-lang reader) (chez-lang language))
+         (define language
+           (language-with-lexer
+             (language-with-part
+               (make-s-exp-language default-readtable (read-mode r6rs) '((rnrs)) 'begin)
+               'extra (lambda (name forms) '(library)))
+             'the-lexer))))
+
+(let-values ([(language forms) (read-text "#!test/quote test/doc $x ^y\n$(a ^b)")])
+  (check "meta chain name" "test/quote test/doc" (language-name language))
+  (check "meta chain libraries" '((test quote lang) (test doc lang)) (language-libraries language))
+  (check "meta chain forms" '('x (up y) '(a (up b))) (map syntax->datum forms))
+  (check "meta-language form span" '(22 24) (span (car forms)))
+  (check "meta chain keeps the base's fields" '(chez ((test doc)) doc-begin (metas))
+    (list (language-mode language) (language-imports language) (language-body-macro language)
+          (map car (language-parts language)))))
+(let-values ([(language forms) (read-text "#!test/quote test/lexed $x")])
+  (check "meta chain keeps every field of the base"
+    '(r6rs ((rnrs)) begin (extra) the-lexer ('x))
+    (list (language-mode language) (language-imports language) (language-body-macro language)
+          (map car (language-parts language)) (language-lexer language)
+          (map syntax->datum forms))))
+(check "tab after a meta-language" '('x) (forms-of "#!test/quote\ttest/doc $x"))
+(check "blanks after a meta-language" '('x) (forms-of "#!test/quote \t \ttest/doc $x"))
+(check "meta-language without a source-file descriptor" '('x (up y))
+  (let ([port (open-input-string "#!test/quote test/doc $x ^y")])
+    (read-language-forms (read-language port #f) port #f)))
+
+(let-values ([(language forms) (read-text "#!test/quote test/quote test/doc $x")])
+  (check "repeated meta-language name" "test/quote test/quote test/doc" (language-name language))
+  (check "repeated meta-language libraries" '((test quote lang) (test quote lang) (test doc lang))
+    (language-libraries language))
+  (check "repeated meta-language forms" '('x) (map syntax->datum forms)))
+(let-values ([(language forms) (read-text "#!test/quote test/dollar test/doc $x %y ^z")])
+  (check "two meta-languages: libraries" '((test quote lang) (test dollar lang) (test doc lang))
+    (language-libraries language))
+  (check "two meta-languages: the outer extension applies last" '('x (percent y) (up z))
+    (map syntax->datum forms)))
+(check "two meta-languages in the other order" '((dollar x) (percent y))
+  (forms-of "#!test/dollar test/quote test/doc $x %y"))
+
+(check "meta-language at end of input"
+  '(read-language "missing language name after meta-language test/quote" (12 12))
+  (language-line-error "#!test/quote"))
+(check "meta-language at end of line"
+  '(read-language "missing language name after meta-language test/quote" (12 12))
+  (language-line-error "#!test/quote\n$x"))
+(check "meta-language followed by blanks"
+  '(read-language "missing language name after meta-language test/quote" (15 15))
+  (language-line-error "#!test/quote \t \n$x"))
+(check "meta-language followed by a datum"
+  '(read-language "missing language name after meta-language test/quote" (13 13))
+  (language-line-error "#!test/quote (x)"))
+(check "meta-language followed by a slash"
+  '(read-language "missing language name after meta-language test/quote" (13 13))
+  (language-line-error "#!test/quote /x"))
+(check "bad character in the base name" '(read-language "invalid character #\\. in language name" (17 18))
+  (language-line-error "#!test/quote test.doc"))
+(check "empty segment in the base name" '(read-language "empty segment in language name test//doc" (13 22))
+  (language-line-error "#!test/quote test//doc"))
+(check "directive as the base name"
+  '(read-language "#!r6rs is a Chez Scheme directive, not a language" (13 17))
+  (language-line-error "#!test/quote r6rs"))
+(check "unknown base language"
+  '("test/nope" read-language "unknown language test/nope: library (test nope lang) not found" (13 22))
+  (language-error-of "#!test/quote test/nope"))
+(check "meta-language over a parser language"
+  '("test/lines" read-language
+    "language test/lines reads with its own parser and cannot be extended by test/quote" (13 23))
+  (language-error-of "#!test/quote test/lines\na"))
+(check "meta-language chain over a parser language"
+  '("test/lines" read-language
+    "language test/lines reads with its own parser and cannot be extended by test/dollar" (25 35))
+  (language-error-of "#!test/quote test/dollar test/lines\na"))
+(check "meta-language over a parser language without a source-file descriptor" '(#t #f)
+  (let ([c (raised (lambda () (read-language (open-input-string "#!test/quote test/lines") #f)))])
+    (list (language-error? c) (source-condition? c))))
+(check "meta-language over a parser language: location"
+  "Exception in read-language: language test/lines reads with its own parser and cannot be extended by test/quote \"test/lines\" at line 1, char 14 of build/language-test-file.sls"
+  (with-file "#!test/quote test/lines\n"
+    (lambda (path)
+      (condition-text (raised (lambda () (read-lang-file path)))))))
+(check "meta-language without a base: location"
+  "Exception in read-language: missing language name after meta-language test/quote \"\" at line 1, char 13 of build/language-test-file.sls"
+  (with-file "#!test/quote\n$x\n"
+    (lambda (path)
+      (condition-text (raised (lambda () (read-lang-file path)))))))
+(check "meta-language extension must return a readtable" 'read-language
+  (assertion-of (lambda () (read-text "#!test/broken test/doc"))))
+
+(let-values ([(language forms) (read-text "#!chez-lang/chez\n(library (x) (export) (import (rnrs)))")])
+  (check "chez-lang/chez fields"
+    (list "chez-lang/chez" '((chez-lang chez lang)) default-readtable 'r6rs '() #f)
+    (list (language-name language) (language-libraries language) (language-readtable language)
+          (language-mode language) (language-imports language) (language-body-macro language)))
+  (check "chez-lang/chez forms" '((library (x) (export) (import (rnrs)))) (map syntax->datum forms)))
+(check "chez-lang/chez reads in R6RS mode"
+  '(raised "Exception in reader-read: #% primitive syntax is not allowed in #!r6rs mode \"#%\" at char 17 of text")
+  (forms-of "#!chez-lang/chez\n#%car"))
+(check "chez-lang/chez switches mode with #!chezscheme" '(($primitive car))
+  (forms-of "#!chez-lang/chez\n#!chezscheme #%car"))
+(let-values ([(language forms) (read-text "#!test/quote chez-lang/chez $x")])
+  (check "meta-language over chez-lang/chez" '(r6rs ('x))
+    (list (language-mode language) (map syntax->datum forms))))
+
+(let ([meta (make-meta-language values)] [plain (make-plain-language default-readtable (read-mode chez))])
+  (check "meta-language? on a meta-language" #t (meta-language? meta))
+  (check "language? on a meta-language" #f (language? meta))
+  (check "meta-language? on a language" #f (meta-language? plain))
+  (check "meta-language? on a symbol" #f (meta-language? 'x)))
+(check "meta-language needs a procedure" 'make-meta-language
+  (assertion-of (lambda () (make-meta-language 'extend))))
+
+(let* ([base (language-with-lexer (make-s-exp-language default-readtable (read-mode r6rs) '((rnrs)) 'begin)
+               'lexer)]
+       [one (language-with-part base 'one car)]
+       [two (language-with-part one 'two cdr)])
+  (check "language-with-part adds parts in order" (list (cons 'one car) (cons 'two cdr))
+    (language-parts two))
+  (check "language-with-part keeps the other fields" (list default-readtable 'r6rs '((rnrs)) 'begin 'lexer)
+    (list (language-readtable two) (language-mode two) (language-imports two)
+          (language-body-macro two) (language-lexer two)))
+  (check "language-with-part leaves the original" '() (language-parts base))
+  (check "language-with-lexer keeps the parts" '(one two)
+    (map car (language-parts (language-with-lexer two 'other)))))
+(check "language-with-part needs a language" 'language-with-part
+  (assertion-of (lambda () (language-with-part (make-meta-language values) 'p car))))
+(check "language-with-part needs a symbol part" 'language-with-part
+  (assertion-of
+    (lambda () (language-with-part (make-plain-language default-readtable (read-mode chez)) "p" car))))
+(check "language-with-part needs a new part" 'language-with-part
+  (assertion-of
+    (lambda ()
+      (language-with-part
+        (language-with-part (make-plain-language default-readtable (read-mode chez)) 'p car)
+        'p cdr))))
+(check "language-with-part needs a procedure" 'language-with-part
+  (assertion-of
+    (lambda () (language-with-part (make-plain-language default-readtable (read-mode chez)) 'p 'car))))
+
 (check "language-error condition" '(#t #t "x/y")
   (let ([c (make-language-error "x/y")])
     (list (language-error? c) (error? c) (language-error-name c))))

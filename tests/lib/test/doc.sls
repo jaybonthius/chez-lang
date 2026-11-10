@@ -14,14 +14,19 @@
 
   (define-property define-meta definer (lambda (form) '()))
 
-  ;; doc is captured from the doc-begin keyword, which the loader writes in
-  ;; the page's context, so the page and its importers see it.
+  ;; doc and this-library are captured from the doc-begin keyword, which the
+  ;; loader writes in the page's context, so the page sees both and its
+  ;; importers see doc.
   (define-syntax doc-begin
     (lambda (x)
       (syntax-case x ()
-        [(k form ...)
-         (with-syntax ([doc (datum->syntax #'k 'doc)])
-           #'(collect-doc doc () form ...))])))
+        [(k library-name form ...)
+         (with-syntax ([doc (datum->syntax #'k 'doc)]
+                       [this-library (datum->syntax #'k 'this-library)])
+           #'(begin
+               (define-syntax this-library
+                 (syntax-rules () [(_) 'library-name]))
+               (collect-doc doc () form ...)))])))
 
   ;; Definitions are emitted in place, before the next form is classified, so
   ;; an import in the body is visible to the forms after it; expressions are

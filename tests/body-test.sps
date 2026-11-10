@@ -192,7 +192,7 @@
             (define-property define-word definer
               (lambda (form) (syntax-case form () [(_ name) (list #'name)]))))
           (module page ()
-            (body-begin
+            (body-begin (pages body)
               (note! 'first)
               (define a 1)
               (begin (define b (+ a 1)) (note! 'second))
@@ -208,10 +208,10 @@
   (call-with-output-file path (lambda (p) (put-string p "(car '(1))\n")) 'replace)
   (check "a definition after a spliced expression is the form reported"
     '(raised "Exception: invalid context for definition (define z 2)")
-    (run `(let () (module page () (body-begin (include ,path) (define z 2))) 'ok)))
+    (run `(let () (module page () (body-begin (pages body) (include ,path) (define z 2))) 'ok)))
   (delete-file path))
 (check "empty body-begin" 'empty
-  (run '(let () (module page () (body-begin)) 'empty)))
+  (run '(let () (module page () (body-begin (pages body))) 'empty)))
 
 (printf "body-test: ~a failures\n" failures)
 (exit (if (= failures 0) 0 1))

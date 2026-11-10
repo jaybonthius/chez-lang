@@ -207,7 +207,7 @@
          (import (rename (only (chezscheme) module export) (module ,module-id) (export ,export-id))
                  ,@(language-imports language)
                  ,@(tracking-imports language))
-         (,module-id ,body-id () (,(language-body-macro language) ,@forms))
+         (,module-id ,body-id () (,(language-body-macro language) ,name ,@forms))
          (,export-id (import ,body-id)))))
 
   (define (generate-program who language forms)
@@ -217,7 +217,7 @@
          (import (rename (only (chezscheme) module) (module ,module-id))
                  ,@(language-imports language)
                  ,@(tracking-imports language))
-         (,module-id ,body-id () (,(language-body-macro language) ,@forms)))))
+         (,module-id ,body-id () (,(language-body-macro language) #f ,@forms)))))
 
   (define (unwrap x)
     (if (annotation? x) (annotation-expression x) x))

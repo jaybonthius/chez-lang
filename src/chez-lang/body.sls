@@ -16,16 +16,16 @@
     (lambda (x)
       (lambda (lookup)
         (syntax-case x ()
-          [(_) #'(begin)]
-          [(_ (b form ...) rest ...)
+          [(_ library-name) #'(begin)]
+          [(_ library-name (b form ...) rest ...)
            (and (identifier? #'b) (free-identifier=? #'b #'begin))
-           #'(body-begin form ... rest ...)]
-          [(_ form rest ...)
+           #'(body-begin library-name form ... rest ...)]
+          [(_ library-name form rest ...)
            (definition-form? #'form lookup)
            (let ([names (form-defined-names #'form lookup)])
              (if (null? names)
-                 #'(begin form (body-begin rest ...))
+                 #'(begin form (body-begin library-name rest ...))
                  (with-syntax ([(name ...) names])
-                   #'(begin form (export name ...) (body-begin rest ...)))))]
-          [(_ form rest ...)
-           #'(begin (define t (begin form (void))) (body-begin rest ...))])))))
+                   #'(begin form (export name ...) (body-begin library-name rest ...)))))]
+          [(_ library-name form rest ...)
+           #'(begin (define t (begin form (void))) (body-begin library-name rest ...))])))))

@@ -60,6 +60,8 @@ expect "second import" "((pages hello))" doc "$hello"
 expect "page defines and exports a name its language exports" "((pages hello))" "(up 1)" "(page-up 1)"
 expect "parser language page" "((pages lines))" doc '("first line" "second line")'
 expect "plain language page" "((pages plain))" plain '"plain"'
+printf '#!test/doc\n(define here (this-library))\n(this-library)\n' > lib/pages/named.sls
+expect "body macro given the library name" "((pages named))" "(list here doc)" '((pages named) ((pages named)))'
 
 printf '#!test/lines\nnote\n' > lib/pages/note.page
 expect "page with an installed extension" "((pages note))" doc '("note")'
@@ -97,7 +99,7 @@ output=$("$scheme" -q --libdirs src:lib --program plain.sps 2>&1) || fail "plain
 cat > program.sps <<'EOF'
 #!test/doc
 (import (pages greet))
-(write (greet "program"))
+(write (list (greet "program") (this-library)))
 EOF
 cat > compile-program.sps <<'EOF'
 (import (chezscheme) (chez-lang loader))
@@ -107,7 +109,7 @@ EOF
 "$scheme" -q --libdirs src:lib --compile-imported-libraries --program compile-program.sps > /dev/null 2>&1 \
   || fail "compiling a program failed"
 output=$("$scheme" -q --libdirs src:lib --program program.so 2>&1) || fail "the program failed: $output"
-[ "$output" = '("Hello, " "program")' ] || fail "program: expected (\"Hello, \" \"program\"), got $output"
+[ "$output" = '(("Hello, " "program") #f)' ] || fail "program: expected ((\"Hello, \" \"program\") #f), got $output"
 
 printf '#!test/nope\n1\n' > lib/pages/unknown.sls
 expect_error "unknown language" "((pages unknown))" doc \
@@ -251,7 +253,7 @@ cat > lib/test/own.sls <<'EOF'
   (define-syntax own-begin
     (lambda (x)
       (syntax-case x ()
-        [(k form ...)
+        [(k library-name form ...)
          (with-syntax ([doc (datum->syntax #'k 'doc)])
            #'(begin (export doc) (define doc (list form ...))))]))))
 EOF
@@ -264,6 +266,45 @@ cat > lib/test/own/lang.sls <<'EOF'
 EOF
 printf '#!test/own\n(module 1)\n' > lib/pages/own.sls
 expect "language that exports its own module" "((pages own))" doc '((own-module 1))'
+
+mkdir lib/test/cell
+cat > lib/test/cell.sls <<'EOF'
+(library (test cell)
+  (export cell-begin define-cell)
+  (import (chezscheme) (chez-lang body))
+  (export (import (chezscheme)))
+
+  (define-syntax cell-begin
+    (syntax-rules ()
+      [(_ library-name form ...)
+       (begin (implicit-exports #t) (body-begin library-name form ...))]))
+
+  (define-syntax define-cell
+    (syntax-rules ()
+      [(_ name e)
+       (begin
+         (define cell (box e))
+         (define-syntax name
+           (identifier-syntax [id (unbox cell)] [(set! id v) (set-box! cell v)])))]))
+
+  (define-property define-cell definer
+    (lambda (form) (syntax-case form () [(_ name e) (list #'name)]))))
+EOF
+cat > lib/test/cell/lang.sls <<'EOF'
+(library (test cell lang)
+  (export language)
+  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (define language
+    (make-s-exp-language default-readtable (read-mode chez) '((test cell)) 'cell-begin)))
+EOF
+cat > lib/pages/cell.sls <<'EOF'
+#!test/cell
+(define-cell count 1)
+(define (bump!) (set! count (+ count 1)) count)
+(define (map f x) (list 'mine (f x)))
+(define (negated x) (map - x))
+EOF
+expect "implicit exports in the body module" "((pages cell))" "(list (bump!) count (negated 1))" '(2 2 (mine -1))'
 
 printf '#!test/plain\n(import (rnrs) (pages greet))\n(write (greet "plain"))\n' > plain-program.sps
 cat > compile-plain-program.sps <<'EOF'

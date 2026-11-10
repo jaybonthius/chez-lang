@@ -30,6 +30,7 @@ cat > lib/pages/shown.sls <<'EOF'
   (define shown (list 'shown doc)))
 EOF
 printf '#!test/doc\n(define-meta title "Post")\n(this-library)\n' > lib/pages/post.sls
+sed "s/'((test doc))/'((only (test doc) up define-meta))/" lib/test/doc/lang.sls > doc-lang-without-body.sls
 
 cat > helpers.ss <<'EOF'
 (define (show label x)
@@ -112,6 +113,12 @@ cat > reload.sps <<'EOF'
 (edit! "lib/test/doc/lang.sls" (call-with-input-file "lib/test/doc/lang.sls" get-string-all))
 (show "language library"
   (list-sort (lambda (a b) (string<? (format "~s" a) (format "~s" b))) (reload '(test doc lang))))
+(define doc-lang (call-with-input-file "lib/test/doc/lang.sls" get-string-all))
+(edit! "lib/test/doc/lang.sls" (call-with-input-file "doc-lang-without-body.sls" get-string-all))
+(show "language whose imports lose its body macro" (reload '(test doc lang)))
+(edit! "lib/test/doc/lang.sls" doc-lang)
+(show "language restored"
+  (list-sort (lambda (a b) (string<? (format "~s" a) (format "~s" b))) (reload '(test doc lang))))
 
 (show "no source" (reload '(pages nowhere)))
 (show "not a library name" (reload 'pages))
@@ -147,6 +154,8 @@ post and part: (((pages post)) ((title . "Post")))
 page with a part: ((pages post) (pages post metas))
 post and part after reload: (() ((title . "Edited")))
 language library: ((pages hello) (pages post metas) (pages post) (pages shown) (test doc lang))
+language whose imports lose its body macro: "Exception in compile-lang-library: body macro doc-begin is not exported by ((only (test doc) up define-meta))"
+language restored: ((pages hello) (pages post metas) (pages post) (pages shown) (test doc lang))
 no source: "Exception in reload-library: library (pages nowhere) has no source file"
 not a library name: "Exception in reload-library: pages is not a library name"' \
   "$(run reload.sps | grep -v '^compiling ')"

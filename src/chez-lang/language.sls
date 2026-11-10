@@ -257,10 +257,15 @@
           (unless (or src found? (member library (library-list)))
             (raise-language-error who name sfd start end
               "unknown language ~a: library ~s not found" name library)))
-        (let* ([env (parameterize ([libraries-loading (cons library (libraries-loading))])
-                      (environment `(library ,library)))]
-               [language (and (memq 'language (library-exports library))
-                              (eval 'language env))])
+        ;; Local imports, because Chez never frees an environment.
+        ;; library-exports answers only for a loaded library, so an empty
+        ;; import loads it first.
+        (let ([language
+               (parameterize ([libraries-loading (cons library (libraries-loading))])
+                 (eval `(let () (import (only (library ,library))) #f) (scheme-environment))
+                 (and (memq 'language (library-exports library))
+                      (eval `(let () (import (only (library ,library) language)) language)
+                            (scheme-environment))))])
           (unless (or (language? language) (meta-language? language))
             (raise-language-error who name sfd start end
               "library ~s does not export a language" library))

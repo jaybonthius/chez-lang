@@ -190,10 +190,19 @@
         (make-irritants-condition irritants)
         (make-format-condition))))
 
+  ;; Chez never frees an environment, and each one slows every later
+  ;; compile, so each imports list is checked once per body macro. A
+  ;; reloaded language library makes new imports lists, so they are checked
+  ;; again; weak keys drop the old ones. Used only under the library lock.
+  (define checked-body-macros (make-weak-eq-hashtable))
+
   (define (check-body-macro who language)
     (let ([body-macro (language-body-macro language)] [imports (language-imports language)])
-      (unless (memq body-macro (environment-symbols (apply environment imports)))
-        (raise-language-error who language "body macro ~a is not exported by ~s" body-macro imports))))
+      (unless (memq body-macro (eq-hashtable-ref checked-body-macros imports '()))
+        (unless (memq body-macro (environment-symbols (apply environment imports)))
+          (raise-language-error who language "body macro ~a is not exported by ~s" body-macro imports))
+        (eq-hashtable-update! checked-body-macros imports
+          (lambda (body-macros) (cons body-macro body-macros)) '()))))
 
   ;; Gensyms keep the wrapper's names apart from the language's exports and
   ;; the page's definitions, so a page may define a name its language

@@ -17,6 +17,21 @@
     (let-values ([(src obj found?) (search-library who library)])
       src))
 
+  ;; A part of a page, (page ... part), is compiled from the page's source,
+  ;; and no other library shares a source, so name is either the page or a
+  ;; part of it.
+  (define (source-page who name source)
+    (if (null? (cdr name))
+        name
+        (let ([parent (list-head name (fx- (length name) 1))])
+          (if (equal? (library-source who parent) source) parent name))))
+
+  (define (page-or-part? library page)
+    (let ([n (length page)])
+      (or (equal? library page)
+          (and (fx= (length library) (fx+ n 1))
+               (equal? (list-head library n) page)))))
+
   (define (make-library-target who library)
     (let-values ([(src obj found?) (search-library who library)])
       (unless src
@@ -30,6 +45,12 @@
         reference
         (list-head reference (fx- (length reference) 1))))
 
+  ;; These are the libraries an object records as imported, by which
+  ;; maybe-compile-library judges it out of date; the other requirements
+  ;; are what running the library needs.
+  (define (library-imports library)
+    (map reference-name (library-requirements library (library-requirements-options import))))
+
   ;; library-requirements lists a library's imports only once its
   ;; compile-time information is loaded, and a library that has only been
   ;; run, as a compiled program's imports are, has none. Importing it loads
@@ -38,35 +59,42 @@
   ;; Importing a library whose object was loaded again after one of its
   ;; imports was recompiled without it fails, so only libraries lacking the
   ;; information are imported; Chez offers no test for it but this raise.
-  (define (compile-time-information? library)
-    (guard (c [(violation? c) #f])
-      (library-requirements library)
-      #t))
-
   (define (load-compile-time-information! libraries)
-    (let ([lacking (remp compile-time-information? libraries)])
-      (unless (null? lacking)
-        (eval `(let () (import ,@(map (lambda (library) `(only (library ,library))) lacking)) #f)
-              (scheme-environment)))))
+    (unless (null? libraries)
+      (eval `(let () (import ,@(map (lambda (library) `(only (library ,library))) libraries)) #f)
+            (scheme-environment))))
 
-  ;; These are the libraries an object records as imported, by which
-  ;; maybe-compile-library judges it out of date; the other requirements
-  ;; are what running the library needs.
-  (define (library-imports library)
-    (map reference-name (library-requirements library (library-requirements-options import))))
+  (define (known-library-imports library)
+    (guard (c [(violation? c) #f])
+      (library-imports library)))
+
+  (define (all-library-imports libraries)
+    (let ([known (map known-library-imports libraries)])
+      (load-compile-time-information!
+        (fold-right
+          (lambda (library required lacking)
+            (if (or required (not (library-object-filename library)))
+                lacking
+                (cons library lacking)))
+          '()
+          libraries
+          known))
+      (map (lambda (library required) (or required (library-imports library)))
+           libraries
+           known)))
 
   (define (import-tables libraries)
     (let ([imports (make-hashtable equal-hash equal?)]
           [importers (make-hashtable equal-hash equal?)])
       (for-each
-        (lambda (library)
-          (let ([required (library-imports library)])
-            (hashtable-set! imports library required)
-            (for-each
-              (lambda (name)
-                (hashtable-update! importers name (lambda (libraries) (cons library libraries)) '()))
-              required)))
-        libraries)
+        (lambda (library required)
+          (hashtable-set! imports library required)
+          (for-each
+            (lambda (name)
+              (hashtable-update! importers name (lambda (libraries) (cons library libraries)) '()))
+            required))
+        libraries
+        (all-library-imports libraries))
       (values imports importers)))
 
   ;; Each library comes before every library that imports it.
@@ -172,15 +200,16 @@
        (call-with-library-lock
          (lambda ()
            (let* ([source (target-source (make-library-target who name))]
+                  [page (source-page who name source)]
                   [loaded (library-list)]
                   [roots (filter (lambda (library)
                                    (or (equal? library name)
-                                       (and (library-object-filename library)
+                                       (and (page-or-part? library page)
+                                            (library-object-filename library)
                                             (equal? (library-source who library) source))))
                                  loaded)]
                   [considered (filter (lambda (library) (or (member library roots) (importer? library)))
                                       loaded)])
-             (load-compile-time-information! (filter library-object-filename considered))
              (let-values ([(imports importers) (import-tables considered)])
                (recompile-targets!
                  (map (lambda (library) (make-library-target who library))

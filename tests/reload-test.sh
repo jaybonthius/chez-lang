@@ -131,6 +131,10 @@ cat > reload.sps <<'EOF'
 (edit! "lib/pages/post.sls" "#!test/doc\n(define-meta title \"Edited\")\n")
 (show "page with a part" (list-sort (lambda (a b) (< (length a) (length b))) (reload '(pages post))))
 (show "post and part after reload" (list (value '(pages post) 'doc) (value '(pages post metas) 'metas)))
+(edit! "lib/pages/post.sls" "#!test/doc\n(define-meta title \"Part\")\n")
+(show "part of a page" (list-sort (lambda (a b) (< (length a) (length b))) (reload '(pages post metas))))
+(show "post and part after reloading the part"
+  (list (value '(pages post) 'doc) (value '(pages post metas) 'metas)))
 
 (edit! "lib/test/doc/lang.sls" (call-with-input-file "lib/test/doc/lang.sls" get-string-all))
 (show "language library"
@@ -182,6 +186,8 @@ importer after it is back: (shown (("Hey, " "both")))
 post and part: (((pages post)) ((title . "Post")))
 page with a part: ((pages post) (pages post metas))
 post and part after reload: (() ((title . "Edited")))
+part of a page: ((pages post) (pages post metas))
+post and part after reloading the part: (() ((title . "Part")))
 language library: ((pages hello) (pages post metas) (pages post) (pages shown) (test doc lang))
 language whose imports lose its body macro: "Exception in compile-lang-library: body macro doc-begin is not exported by ((only (test doc) up define-meta))"
 language restored: ((pages hello) (pages post metas) (pages post) (pages shown) (test doc lang))

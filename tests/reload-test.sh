@@ -105,6 +105,28 @@ cat > reload.sps <<'EOF'
 (show "library and page" (reload '(pages greet)))
 (show "importer after both" (value '(pages shown) 'shown))
 
+(define greet-hey (call-with-input-file "lib/pages/greet.sls" get-string-all))
+;; Loading an object again, as a caller does to run a library's body again,
+;; leaves its compile-time information tied to the imports it was compiled
+;; against.
+(call-with-library-lock
+  (lambda ()
+    (load-compiled-from-port
+      (open-bytevector-input-port (call-with-port (open-file-input-port "lib/pages/shown.so") get-bytevector-all)))))
+(edit! "lib/pages/greet.sls"
+  "(library (pages greet) (export hi) (import (chezscheme)) (define (hi name) (list \"Yo, \" name)))")
+(rename-file "lib/pages/shown.sls" "shown.sls")
+(show "importer left out, its source gone"
+  (reload-library '(pages greet) (lambda (library) (not (equal? library '(pages shown))))))
+(show "page with its importer left out" (value '(pages hello) 'doc))
+(rename-file "shown.sls" "lib/pages/shown.sls")
+(show "importer left out, reloaded itself" (reload '(pages shown)))
+(show "importer after reloading itself" (value '(pages shown) 'shown))
+(show "not a procedure" (outcome (lambda () (reload-library '(pages greet) #t))))
+(edit! "lib/pages/greet.sls" greet-hey)
+(show "importer back" (reload '(pages greet)))
+(show "importer after it is back" (value '(pages shown) 'shown))
+
 (show "post and part" (list (value '(pages post) 'doc) (value '(pages post metas) 'metas)))
 (edit! "lib/pages/post.sls" "#!test/doc\n(define-meta title \"Edited\")\n")
 (show "page with a part" (list-sort (lambda (a b) (< (length a) (length b))) (reload '(pages post))))
@@ -150,6 +172,13 @@ objects after rollback: (#f #f #t)
 page needing the library not yet reloaded: "Exception: attempt to reference unbound identifier hi at line 3, char 2 of lib/pages/hello.sls"
 library and page: ((pages greet) (pages hello) (pages shown))
 importer after both: (shown (("Hey, " "both")))
+importer left out, its source gone: ((pages greet) (pages hello))
+page with its importer left out: (("Yo, " "both"))
+importer left out, reloaded itself: ((pages shown))
+importer after reloading itself: (shown (("Yo, " "both")))
+not a procedure: "Exception in reload-library: #t is not a procedure"
+importer back: ((pages greet) (pages hello) (pages shown))
+importer after it is back: (shown (("Hey, " "both")))
 post and part: (((pages post)) ((title . "Post")))
 page with a part: ((pages post) (pages post metas))
 post and part after reload: (() ((title . "Edited")))

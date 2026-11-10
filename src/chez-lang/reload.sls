@@ -35,9 +35,19 @@
   ;; run, as a compiled program's imports are, has none. Importing it loads
   ;; that information, as the next import of it would. A library loaded from
   ;; source has both, and a built-in library imports nothing reloadable.
+  ;; Importing a library whose object was loaded again after one of its
+  ;; imports was recompiled without it fails, so only libraries lacking the
+  ;; information are imported; Chez offers no test for it but this raise.
+  (define (compile-time-information? library)
+    (guard (c [(violation? c) #f])
+      (library-requirements library)
+      #t))
+
   (define (load-compile-time-information! libraries)
-    (eval `(let () (import ,@(map (lambda (library) `(only (library ,library))) libraries)) #f)
-          (scheme-environment)))
+    (let ([lacking (remp compile-time-information? libraries)])
+      (unless (null? lacking)
+        (eval `(let () (import ,@(map (lambda (library) `(only (library ,library))) lacking)) #f)
+              (scheme-environment)))))
 
   ;; These are the libraries an object records as imported, by which
   ;; maybe-compile-library judges it out of date; the other requirements
@@ -147,24 +157,33 @@
   ;; out of date when that source changes, though it need not import the
   ;; library named. Every source is found before anything is recompiled, so a
   ;; library that cannot be rebuilt stops the reload before it changes
-  ;; anything.
-  (define (reload-library name)
-    (define who 'reload-library)
-    (unless (library-name? name)
-      (assertion-violationf who "~s is not a library name" name))
-    (call-with-library-lock
-      (lambda ()
-        (let* ([source (target-source (make-library-target who name))]
-               [loaded (library-list)]
-               [roots (filter (lambda (library)
-                                (or (equal? library name)
-                                    (and (library-object-filename library)
-                                         (equal? (library-source who library) source))))
-                              loaded)])
-          (load-compile-time-information! (filter library-object-filename loaded))
-          (let-values ([(imports importers) (import-tables loaded)])
-            (recompile-targets!
-              (map (lambda (library) (make-library-target who library))
-                   (with-importers-in-order roots importers))
-              roots
-              imports)))))))
+  ;; anything. Chez never drops a library, so an importer its user has
+  ;; stopped using may have lost its source or no longer compile; importer?
+  ;; leaves such importers out.
+  (define reload-library
+    (case-lambda
+      [(name) (reload-library name (lambda (library) #t))]
+      [(name importer?)
+       (define who 'reload-library)
+       (unless (library-name? name)
+         (assertion-violationf who "~s is not a library name" name))
+       (unless (procedure? importer?)
+         (assertion-violationf who "~s is not a procedure" importer?))
+       (call-with-library-lock
+         (lambda ()
+           (let* ([source (target-source (make-library-target who name))]
+                  [loaded (library-list)]
+                  [roots (filter (lambda (library)
+                                   (or (equal? library name)
+                                       (and (library-object-filename library)
+                                            (equal? (library-source who library) source))))
+                                 loaded)]
+                  [considered (filter (lambda (library) (or (member library roots) (importer? library)))
+                                      loaded)])
+             (load-compile-time-information! (filter library-object-filename considered))
+             (let-values ([(imports importers) (import-tables considered)])
+               (recompile-targets!
+                 (map (lambda (library) (make-library-target who library))
+                      (with-importers-in-order roots importers))
+                 roots
+                 imports)))))])))

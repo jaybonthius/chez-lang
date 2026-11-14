@@ -1,7 +1,7 @@
 #!chezscheme
-(library (chez-lang include)
+(library (lang include)
   (export include/lang)
-  (import (chezscheme) (chez-lang language) (chez-lang body))
+  (import (chezscheme) (lang language) (lang body))
 
   ;; Chez's include records its file with this undocumented procedure, and no
   ;; documented procedure adds a file to an object's recompile information.

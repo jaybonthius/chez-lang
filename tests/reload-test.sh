@@ -61,7 +61,7 @@ cat > helpers.ss <<'EOF'
 EOF
 
 cat > reload.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader) (chez-lang reload))
+(import (chezscheme) (lang language) (lang loader) (lang reload))
 (install-loader!)
 (include "helpers.ss")
 
@@ -198,7 +198,7 @@ not a library name: "Exception in reload-library: pages is not a library name"' 
 # Every library this process uses loads from the object the run above wrote,
 # so nothing compiles until a reload.
 cat > fresh.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader) (chez-lang reload))
+(import (chezscheme) (lang language) (lang loader) (lang reload))
 (install-loader!)
 (include "helpers.ss")
 
@@ -239,7 +239,7 @@ importer after fix: (shown (("Ho, " "fixed")))' "$(run fresh.sps)"
 # A compiled program only runs the libraries it imports, so they have no
 # compile-time information until something imports them.
 cat > main.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader) (chez-lang reload) (pages shown))
+(import (chezscheme) (lang language) (lang loader) (lang reload) (pages shown))
 (install-loader!)
 (include "helpers.ss")
 
@@ -249,7 +249,7 @@ cat > main.sps <<'EOF'
 (show "the program's own import" shown)
 EOF
 cat > compile-main.sps <<'EOF'
-(import (chezscheme) (chez-lang loader))
+(import (chezscheme) (lang loader))
 (install-loader!)
 (compile-program "main.sps")
 EOF

@@ -1,4 +1,4 @@
-(library (chez-lang language)
+(library (lang language)
   (export
     make-s-exp-language
     make-parser-language
@@ -29,7 +29,7 @@
     make-language-error
     language-error?
     language-error-name)
-  (import (chezscheme) (chez-lang reader))
+  (import (chezscheme) (lang reader))
 
   (define-record-type language
     (nongenerative)

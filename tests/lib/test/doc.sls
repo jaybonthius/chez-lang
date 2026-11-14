@@ -1,6 +1,6 @@
 (library (test doc)
   (export doc-begin up define-meta)
-  (import (chezscheme) (chez-lang body))
+  (import (chezscheme) (lang body))
   (export (import (chezscheme)))
 
   (define (up x) (list 'up x))

@@ -15,7 +15,7 @@ fail() {
 }
 
 cat > import.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 (define (argument i) (read (open-input-string (list-ref (command-line-arguments) i))))
 (guard (c [(or (error? c) (violation? c)) (display-condition c) (newline) (exit 1)])
@@ -55,7 +55,7 @@ EOF
 cat > lib/pages/including.sls <<'EOF'
 (library (pages including)
   (export included after inner)
-  (import (chezscheme) (chez-lang include) (only (test doc) up))
+  (import (chezscheme) (lang include) (only (test doc) up))
 
   (define (helper x) (list 'helper x))
   (include/lang "part.txt")
@@ -89,7 +89,7 @@ sleep 1
 printf '#!test/doc\n(define included (helper ^"part"))\n' > lib/pages/part.txt
 expect "import after restoring the included file" "((pages including))" "$value" "$expected"
 
-for touched in lib/test/doc/lang.sls src/chez-lang/include.sls; do
+for touched in lib/test/doc/lang.sls src/lang/include.sls; do
   before=$(mtime lib/pages/including.so)
   sleep 1
   touch "$touched"
@@ -106,7 +106,7 @@ expect "import after touching an unrelated library" "((pages including) (pages u
 
 cat > lib/pages/doc-including.sls <<'EOF'
 #!test/doc
-(import (chez-lang include))
+(import (lang include))
 (define (helper x) (list 'helper x))
 (include/lang "part.txt")
 "text"
@@ -120,18 +120,18 @@ touch lib/pages/part.txt
 expect "page after touching the included file" "((pages doc-including))" doc "(\"text\" $included)"
 [ "$(mtime lib/pages/doc-including.so)" != "$before" ] || fail "touching the included file did not recompile the page"
 
-printf '(library (pages bad-name) (export) (import (chezscheme) (chez-lang include)) (include/lang part))\n' \
+printf '(library (pages bad-name) (export) (import (chezscheme) (lang include)) (include/lang part))\n' \
   > lib/pages/bad-name.sls
 expect_error "file name that is not a string" "((pages bad-name))" 0 \
-  'Exception in include/lang: expected (include/lang "file") (include/lang part) at line 1, char 78 of lib/pages/bad-name.sls'
+  'Exception in include/lang: expected (include/lang "file") (include/lang part) at line 1, char 73 of lib/pages/bad-name.sls'
 
 printf '(define x 1)\n' > lib/pages/plain.txt
-printf '(library (pages no-line) (export) (import (chezscheme) (chez-lang include)) (include/lang "plain.txt"))\n' \
+printf '(library (pages no-line) (export) (import (chezscheme) (lang include)) (include/lang "plain.txt"))\n' \
   > lib/pages/no-line.sls
 expect_error "included file without a language line" "((pages no-line))" 0 \
   'Exception in read-language: missing language line "(d" at line 1, char 1 of lib/pages/plain.txt'
 
-printf '(library (pages missing) (export) (import (chezscheme) (chez-lang include)) (include/lang "missing.txt"))\n' \
+printf '(library (pages missing) (export) (import (chezscheme) (lang include)) (include/lang "missing.txt"))\n' \
   > lib/pages/missing.sls
 expect_error "missing included file" "((pages missing))" 0 \
   'Exception in include/lang: file "missing.txt" not found in source directories'

@@ -1,10 +1,10 @@
-(library (chez-lang private definitions)
+(library (lang private definitions)
   (export
     definer
     definition-form?
     form-defined-names
     unbound-identifier?)
-  (import (chezscheme) (chez-lang private probe))
+  (import (chezscheme) (lang private probe))
 
   (define definer)
 

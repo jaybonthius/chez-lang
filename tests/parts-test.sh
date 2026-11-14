@@ -15,7 +15,7 @@ fail() {
 }
 
 cat > import.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader! '(".page"))
 (define (argument i) (read (open-input-string (list-ref (command-line-arguments) i))))
 (guard (c [(language-error? c) (display "&language-error ") (display-condition c) (newline) (exit 1)]
@@ -102,7 +102,7 @@ expect "page and part with nothing changed" "((pages post) (pages post metas))" 
 [ "$(mtime lib/pages/post/metas.so)" = "$part_before" ] || fail "the part was recompiled with nothing changed"
 [ "$(mtime lib/pages/post.so)" = "$page_before" ] || fail "the page was recompiled with nothing changed"
 
-for touched in lib/test/doc/lang.sls src/chez-lang/reader.sls src/chez-lang/loader.sls; do
+for touched in lib/test/doc/lang.sls src/lang/reader.sls src/lang/loader.sls; do
   before=$(mtime lib/pages/post/metas.so)
   sleep 1
   touch "$touched"
@@ -123,7 +123,7 @@ printf '#!test/doc\n(define-meta title "Changed")\n' > lib/pages/post.sls
 expect "part after changing the page" "((pages post metas))" metas '((title . "Changed"))'
 
 cat > requirements.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 (define part '(pages post metas))
 (let ([imports (call-with-library-lock
@@ -131,7 +131,7 @@ cat > requirements.sps <<'EOF'
                    (environment part)
                    (library-requirements part (library-requirements-options import))))])
   (write (map (lambda (name) (and (member name imports) #t))
-              '((test doc lang) (chez-lang reader) (chez-lang loader) (pages post) (test doc)))))
+              '((test doc lang) (lang reader) (lang loader) (pages post) (test doc)))))
 EOF
 output=$(timeout 60 "$scheme" -q --libdirs src:lib --compile-imported-libraries --program requirements.sps 2>&1 | tail -n 1)
 [ "$output" = '(#t #t #t #f #f)' ] || fail "the part's imports: got $output"
@@ -231,7 +231,7 @@ mkdir lib/test/malformed
 cat > lib/test/malformed/lang.sls <<'EOF'
 (library (test malformed lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language
     (language-with-part
       (make-s-exp-language default-readtable (read-mode chez) '((test doc)) 'doc-begin)
@@ -246,7 +246,7 @@ mkdir lib/blog
 cat > lib/blog/lang.sls <<'EOF'
 (library (blog lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language (make-s-exp-language default-readtable (read-mode chez) '((test doc)) 'doc-begin)))
 EOF
 printf '#!blog\n"post"\n' > lib/blog.sls
@@ -264,7 +264,7 @@ mkdir -p olib/blog2 olib/tools
 cat > olib/blog2/lang.sls <<'EOF'
 (library (blog2 lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language (make-s-exp-language default-readtable (read-mode chez) '((test doc)) 'doc-begin)))
 EOF
 cat > olib/tools/util.sls <<'EOF'

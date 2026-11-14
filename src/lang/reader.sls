@@ -1,4 +1,4 @@
-(library (chez-lang reader)
+(library (lang reader)
   (export
     default-readtable
     readtable?

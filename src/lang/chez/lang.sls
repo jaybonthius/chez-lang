@@ -1,6 +1,6 @@
-(library (chez-lang chez lang)
+(library (lang chez lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
 
   ;; import and load-program read a library or program in R6RS mode; a file
   ;; starts with #!chezscheme for Chez's extensions, as an .sls file does.

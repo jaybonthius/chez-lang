@@ -1,4 +1,4 @@
-(library (chez-lang private probe)
+(library (lang private probe)
   (export chez-lang-probe:context)
   (import (prefix (only (chezscheme) define syntax) chez-lang-probe:))
 

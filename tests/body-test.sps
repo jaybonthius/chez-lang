@@ -1,4 +1,4 @@
-(import (chezscheme) (chez-lang body))
+(import (chezscheme) (lang body))
 
 (define failures 0)
 
@@ -56,7 +56,7 @@
          (syntax-rules ()
            [(_ name text) (define name (list 'term text))]))
        ,expression)
-    (environment '(chezscheme) '(chez-lang body) '(chez-lang include))))
+    (environment '(chezscheme) '(lang body) '(lang include))))
 
 (check "define a variable" '(a) (run '(defined-names (define a 1))))
 (check "define a procedure" '(b) (run '(defined-names (define (b x) x))))

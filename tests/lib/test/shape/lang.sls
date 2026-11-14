@@ -1,6 +1,6 @@
 (library (test shape lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language) (chez-lang properties)
+  (import (chezscheme) (lang reader) (lang language) (lang properties)
           (test shape property))
 
   (define (read-bracketed r char start)
@@ -13,5 +13,5 @@
     (make-s-exp-language
       (readtable-extend-datum-start default-readtable #\[ read-bracketed)
       (read-mode chez)
-      '((test shape) (chez-lang body))
+      '((test shape) (lang body))
       'body-begin)))

@@ -15,7 +15,7 @@ fail() {
 }
 
 cat > import.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 (define (argument i) (read (open-input-string (list-ref (command-line-arguments) i))))
 (guard (c [(or (error? c) (violation? c)) (display-condition c) (newline) (exit 1)])
@@ -64,7 +64,7 @@ expect "second import" "((pages quoted))" doc "$quoted"
 
 expect "unrelated library" "((pages quoted) (pages unrelated))" unrelated unrelated
 for touched in lib/pages/quoted.sls lib/test/quote/lang.sls lib/test/doc/lang.sls \
-    src/chez-lang/reader.sls src/chez-lang/loader.sls; do
+    src/lang/reader.sls src/lang/loader.sls; do
   before=$(mtime lib/pages/quoted.so)
   sleep 1
   touch "$touched"
@@ -109,52 +109,52 @@ expect_error "meta-language without a base language" "((pages no-base))" doc \
   'Exception in read-language: missing language name after meta-language test/quote "" at line 1, char 13 of lib/pages/no-base.sls'
 
 cat > lib/pages/quoted-chez.sls <<'EOF'
-#!test/quote chez-lang/chez
+#!test/quote lang/chez
 (library (pages quoted-chez)
   (export quoted)
   (import (rnrs))
   (define quoted $(a b)))
 EOF
-expect "meta-language over chez-lang/chez" "((pages quoted-chez))" quoted '(a b)'
-for touched in src/chez-lang/chez/lang.sls lib/test/quote/lang.sls; do
+expect "meta-language over lang/chez" "((pages quoted-chez))" quoted '(a b)'
+for touched in src/lang/chez/lang.sls lib/test/quote/lang.sls; do
   before=$(mtime lib/pages/quoted-chez.so)
   sleep 1
   touch "$touched"
-  expect "chez-lang/chez page after touching $touched" "((pages quoted-chez))" quoted '(a b)'
+  expect "lang/chez page after touching $touched" "((pages quoted-chez))" quoted '(a b)'
   [ "$(mtime lib/pages/quoted-chez.so)" != "$before" ] \
-    || fail "touching $touched did not recompile the chez-lang/chez page"
+    || fail "touching $touched did not recompile the lang/chez page"
 done
 
 cat > lib/pages/chez.sls <<'EOF'
-#!chez-lang/chez
+#!lang/chez
 (library (pages chez)
   (export chez)
   (import (rnrs))
   (define chez '(chez)))
 EOF
-expect "chez-lang/chez library" "((pages chez))" chez '(chez)'
+expect "lang/chez library" "((pages chez))" chez '(chez)'
 
-printf '#!chez-lang/chez\n(library (pages primitive) (export primitive) (import (rnrs)) (define primitive #%%car))\n' \
+printf '#!lang/chez\n(library (pages primitive) (export primitive) (import (rnrs)) (define primitive #%%car))\n' \
   > lib/pages/primitive.sls
-expect_error "chez-lang/chez reads in R6RS mode" "((pages primitive))" primitive \
+expect_error "lang/chez reads in R6RS mode" "((pages primitive))" primitive \
   'Exception in reader-read: #% primitive syntax is not allowed in #!r6rs mode "#%" at line 2, char 81 of lib/pages/primitive.sls'
 
-printf '#!chez-lang/chez\n#!chezscheme\n(library (pages chezscheme) (export primitive) (import (chezscheme)) (define primitive (#%%car (quote (1)))))\n' \
+printf '#!lang/chez\n#!chezscheme\n(library (pages chezscheme) (export primitive) (import (chezscheme)) (define primitive (#%%car (quote (1)))))\n' \
   > lib/pages/chezscheme.sls
-expect "chez-lang/chez after #!chezscheme" "((pages chezscheme))" primitive 1
+expect "lang/chez after #!chezscheme" "((pages chezscheme))" primitive 1
 
-printf '#!chez-lang/chez\n(import (rnrs) (pages greet))\n(write (greet "chez"))\n' > chez-program.sps
+printf '#!lang/chez\n(import (rnrs) (pages greet))\n(write (greet "chez"))\n' > chez-program.sps
 printf '#!test/quote test/doc\n(import (pages greet))\n(write (greet $quoted))\n' > quoted-program.sps
 cat > compile-programs.sps <<'EOF'
-(import (chezscheme) (chez-lang loader))
+(import (chezscheme) (lang loader))
 (install-loader!)
 (maybe-compile-program "chez-program.sps")
 (maybe-compile-program "quoted-program.sps")
 EOF
 "$scheme" -q --libdirs src:lib --compile-imported-libraries --program compile-programs.sps > /dev/null 2>&1 \
   || fail "compiling the programs failed"
-output=$("$scheme" -q --libdirs src:lib --program chez-program.so 2>&1) || fail "the chez-lang/chez program failed: $output"
-[ "$output" = '("Hello, " "chez")' ] || fail "chez-lang/chez program: got $output"
+output=$("$scheme" -q --libdirs src:lib --program chez-program.so 2>&1) || fail "the lang/chez program failed: $output"
+[ "$output" = '("Hello, " "chez")' ] || fail "lang/chez program: got $output"
 output=$("$scheme" -q --libdirs src:lib --program quoted-program.so 2>&1) || fail "the meta-language program failed: $output"
 [ "$output" = '("Hello, " quoted)' ] || fail "meta-language program: got $output"
 

@@ -1,4 +1,4 @@
-(library (chez-lang body)
+(library (lang body)
   (export
     definer
     definition-form?
@@ -6,7 +6,7 @@
     unbound-identifier?
 
     body-begin)
-  (import (chezscheme) (chez-lang private definitions))
+  (import (chezscheme) (lang private definitions))
 
   ;; A definition may not follow an expression in a library or module body,
   ;; so each expression becomes the definition of a temporary.  Each form is

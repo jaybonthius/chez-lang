@@ -1,4 +1,4 @@
-(import (chezscheme) (chez-lang reader))
+(import (chezscheme) (lang reader))
 
 (define chez-src (or (getenv "CHEZ_SRC") "tests/chez"))
 (define source-dir (string-append chez-src "/s"))

@@ -1,4 +1,4 @@
-(import (chezscheme) (chez-lang properties) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang properties) (lang language) (lang loader))
 
 (define failures 0)
 

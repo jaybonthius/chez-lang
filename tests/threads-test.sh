@@ -17,7 +17,7 @@ while [ "$run" -le "$runs" ]; do
     printf '#!test/doc\n"%s"\n' "$page" > "$dir/lib/pages/$page.sls"
   done
   cat > "$dir/threads.sps" <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 
 (define pages '((pages t1) (pages t2) (pages t3) (pages t4)))

@@ -15,7 +15,7 @@ fail() {
 }
 
 cat > import.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader! '(".page"))
 (define (argument i) (read (open-input-string (list-ref (command-line-arguments) i))))
 (guard (c [(or (error? c) (violation? c)) (display-condition c) (newline) (exit 1)])
@@ -70,7 +70,7 @@ expect "longest extension is removed from the name" "((pages twice))" doc '("twi
 
 expect "unrelated library" "((pages hello) (pages unrelated))" unrelated unrelated
 for touched in lib/pages/hello.sls lib/test/doc.sls lib/test/doc/lang.sls \
-    src/chez-lang/reader.sls src/chez-lang/language.sls src/chez-lang/loader.sls \
+    src/lang/reader.sls src/lang/language.sls src/lang/loader.sls \
     lib/pages/greet.sls; do
   before=$(mtime lib/pages/hello.so)
   sleep 1
@@ -102,7 +102,7 @@ cat > program.sps <<'EOF'
 (write (list (greet "program") (this-library)))
 EOF
 cat > compile-program.sps <<'EOF'
-(import (chezscheme) (chez-lang loader))
+(import (chezscheme) (lang loader))
 (install-loader!)
 (maybe-compile-program "program.sps")
 EOF
@@ -119,7 +119,7 @@ mkdir lib/test/nobody
 cat > lib/test/nobody/lang.sls <<'EOF'
 (library (test nobody lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language
     (make-s-exp-language default-readtable (read-mode chez) '((test doc)) 'nobody-begin)))
 EOF
@@ -148,7 +148,7 @@ cat > lib/pages/warns.sls <<'EOF'
 EOF
 printf '#!test/doc\n(import (pages warns))\n(warns)\n' > lib/pages/warning.sls
 cat > warning.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 (write (guard (c [(warning? c) 'caught])
          (call-with-library-lock (lambda () (eval '(let () (import (pages warning)) doc))))))
@@ -170,7 +170,7 @@ expect_error "plain language with two forms" "((pages extra))" 0 \
 mkdir outside
 printf '#!test/doc\n1\n' > outside/page.sls
 cat > outside.sps <<'EOF'
-(import (chezscheme) (chez-lang loader))
+(import (chezscheme) (lang loader))
 (install-loader!)
 (guard (c [#t (display-condition c) (newline) (exit 1)])
   (maybe-compile-library "outside/page.sls"))
@@ -180,7 +180,7 @@ output=$("$scheme" -q --libdirs src:lib --compile-imported-libraries --program o
   || fail "source outside the library directories: got $output"
 
 cat > install.sps <<'EOF'
-(import (chezscheme) (chez-lang loader))
+(import (chezscheme) (lang loader))
 (define (who-of thunk)
   (guard (c [(assertion-violation? c) (condition-who c)]) (thunk) #f))
 (write
@@ -198,7 +198,7 @@ mkdir -p lib/only/doc
 cat > lib/only/doc/lang.sls <<'EOF'
 (library (only doc lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language
     (make-s-exp-language default-readtable (read-mode chez) '((test lines)) 'lines-begin)))
 EOF
@@ -207,7 +207,7 @@ expect "language name starting with an import-set keyword" "((pages keyword))" d
 
 printf '#!test/doc\n(define (twice x) (* 2 x))\n(twice 21)\n' > lib/pages/profiled.sls
 cat > compile-profiled.sps <<'EOF'
-(import (chezscheme) (chez-lang loader))
+(import (chezscheme) (lang loader))
 (install-loader!)
 (compile-profile 'block)
 (maybe-compile-library "lib/pages/profiled.sls")
@@ -228,7 +228,7 @@ output=$("$scheme" -q --libdirs src:lib --program run-profiled.sps 2>&1) || fail
 [ "$output" = '((42) #t)' ] || fail "block profiling counts for the page: got $output"
 
 cat > requirements.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 (define (tracks? page names)
   (let ([imports (call-with-library-lock
@@ -236,8 +236,8 @@ cat > requirements.sps <<'EOF'
                      (environment page)
                      (library-requirements page (library-requirements-options import))))])
     (map (lambda (name) (and (member name imports) #t)) names)))
-(write (list (tracks? '(pages hello) '((test doc lang) (chez-lang reader) (chez-lang loader)))
-             (tracks? '(pages lines) '((test lines lang) (chez-lang reader) (chez-lang loader)))))
+(write (list (tracks? '(pages hello) '((test doc lang) (lang reader) (lang loader)))
+             (tracks? '(pages lines) '((test lines lang) (lang reader) (lang loader)))))
 EOF
 output=$("$scheme" -q --libdirs src:lib --compile-imported-libraries --program requirements.sps 2>&1 | tail -n 1)
 [ "$output" = '((#t #t #t) (#t #f #t))' ] || fail "tracking imports: got $output"
@@ -260,7 +260,7 @@ EOF
 cat > lib/test/own/lang.sls <<'EOF'
 (library (test own lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language
     (make-s-exp-language default-readtable (read-mode chez) '((test own)) 'own-begin)))
 EOF
@@ -271,7 +271,7 @@ mkdir lib/test/cell
 cat > lib/test/cell.sls <<'EOF'
 (library (test cell)
   (export cell-begin define-cell)
-  (import (chezscheme) (chez-lang body))
+  (import (chezscheme) (lang body))
   (export (import (chezscheme)))
 
   (define-syntax cell-begin
@@ -293,7 +293,7 @@ EOF
 cat > lib/test/cell/lang.sls <<'EOF'
 (library (test cell lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language
     (make-s-exp-language default-readtable (read-mode chez) '((test cell)) 'cell-begin)))
 EOF
@@ -308,7 +308,7 @@ expect "implicit exports in the body module" "((pages cell))" "(list (bump!) cou
 
 printf '#!test/plain\n(import (rnrs) (pages greet))\n(write (greet "plain"))\n' > plain-program.sps
 cat > compile-plain-program.sps <<'EOF'
-(import (chezscheme) (chez-lang loader))
+(import (chezscheme) (lang loader))
 (install-loader!)
 (maybe-compile-program "plain-program.sps")
 EOF
@@ -325,7 +325,7 @@ expect_error "plain library without an import clause" "((pages short))" 0 \
   'Exception in compile-lang-library: expected (library name (export ...) (import ...) body ...) (library (pages short) (export)) at line 2, char 1 of lib/pages/short.sls'
 
 cat > typed.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 (define (argument i) (read (open-input-string (list-ref (command-line-arguments) i))))
 (guard (c [(language-error? c) (display "&language-error ") (display-condition c) (newline) (exit 1)])
@@ -344,14 +344,14 @@ mkdir lib/cyc
 cat > lib/cyc/lang.sls <<'EOF'
 (library (cyc lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
   (define language (make-s-exp-language default-readtable (read-mode chez) '((cyc)) 'doc-begin)))
 EOF
 printf '#!cyc\n1\n' > lib/cyc.sls
 expect_cycle "page that is its language's module language" "(cyc)" \
   '&language-error Exception in compile-lang-library: language cyc depends on the page lib/cyc.sls being compiled'
 cat > refix.sps <<'EOF'
-(import (chezscheme) (chez-lang language) (chez-lang loader))
+(import (chezscheme) (lang language) (lang loader))
 (install-loader!)
 (define (import-cyc)
   (call-with-library-lock (lambda () (eval '(let () (import (cyc)) doc)))))
@@ -372,7 +372,7 @@ mkdir lib/m8 lib/p8
 cat > lib/m8/lang.sls <<'EOF'
 (library (m8 lang)
   (export language)
-  (import (chezscheme) (chez-lang language))
+  (import (chezscheme) (lang language))
   (define language
     (make-meta-language (lambda (readtable) (eval '(let () (import (p8 page)) 0)) readtable))))
 EOF

@@ -1,9 +1,9 @@
-(library (chez-lang loader)
+(library (lang loader)
   (export
     install-loader!
     compile-lang-library
     compile-lang-program)
-  (import (chezscheme) (only (chez-lang reader) open-source-port) (chez-lang language))
+  (import (chezscheme) (only (lang reader) open-source-port) (lang language))
 
   (define loader-installed? (make-thread-parameter #f))
 
@@ -178,8 +178,8 @@
   ;; recompiles the page when one of them is recompiled.
   (define (tracking-imports language)
     `(,@(map (lambda (name) `(only (library ,name))) (language-libraries language))
-      ,@(if (language-readtable language) '((only (chez-lang reader))) '())
-      (only (chez-lang loader))))
+      ,@(if (language-readtable language) '((only (lang reader))) '())
+      (only (lang loader))))
 
   (define (raise-language-error who language message . irritants)
     (raise

@@ -1,6 +1,6 @@
 (library (test lines lang)
   (export language)
-  (import (chezscheme) (chez-lang language))
+  (import (chezscheme) (lang language))
 
   (define (line-form text start sfd)
     (let ([datum (list 'line text)])

@@ -1,4 +1,4 @@
-(library (chez-lang properties)
+(library (lang properties)
   (export
     make-annotation-property
     annotation-property?

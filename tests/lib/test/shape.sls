@@ -1,6 +1,6 @@
 (library (test shape)
   (export shape-of)
-  (import (chezscheme) (chez-lang properties) (test shape property))
+  (import (chezscheme) (lang properties) (test shape property))
   (export (import (chezscheme)))
 
   (define-syntax shape-of

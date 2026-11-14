@@ -1,4 +1,4 @@
-(import (chezscheme) (chez-lang reader) (chez-lang language))
+(import (chezscheme) (lang reader) (lang language))
 
 (define failures 0)
 
@@ -260,7 +260,7 @@
 
 (eval '(library (test dollar lang)
          (export language)
-         (import (chezscheme) (chez-lang reader) (chez-lang language))
+         (import (chezscheme) (lang reader) (lang language))
          (define (tagger tag)
            (lambda (r char start) (reader-annotate r (list tag (reader-read r)) start)))
          (define language
@@ -271,11 +271,11 @@
                  #\% (tagger 'percent)))))))
 (eval '(library (test broken lang)
          (export language)
-         (import (chezscheme) (chez-lang language))
+         (import (chezscheme) (lang language))
          (define language (make-meta-language (lambda (readtable) 'broken)))))
 (eval '(library (test lexed lang)
          (export language)
-         (import (chezscheme) (chez-lang reader) (chez-lang language))
+         (import (chezscheme) (lang reader) (lang language))
          (define language
            (language-with-lexer
              (language-with-part
@@ -365,19 +365,19 @@
 (check "meta-language extension must return a readtable" 'read-language
   (assertion-of (lambda () (read-text "#!test/broken test/doc"))))
 
-(let-values ([(language forms) (read-text "#!chez-lang/chez\n(library (x) (export) (import (rnrs)))")])
-  (check "chez-lang/chez fields"
-    (list "chez-lang/chez" '((chez-lang chez lang)) default-readtable 'r6rs '() #f)
+(let-values ([(language forms) (read-text "#!lang/chez\n(library (x) (export) (import (rnrs)))")])
+  (check "lang/chez fields"
+    (list "lang/chez" '((lang chez lang)) default-readtable 'r6rs '() #f)
     (list (language-name language) (language-libraries language) (language-readtable language)
           (language-mode language) (language-imports language) (language-body-macro language)))
-  (check "chez-lang/chez forms" '((library (x) (export) (import (rnrs)))) (map syntax->datum forms)))
-(check "chez-lang/chez reads in R6RS mode"
-  '(raised "Exception in reader-read: #% primitive syntax is not allowed in #!r6rs mode \"#%\" at char 17 of text")
-  (forms-of "#!chez-lang/chez\n#%car"))
-(check "chez-lang/chez switches mode with #!chezscheme" '(($primitive car))
-  (forms-of "#!chez-lang/chez\n#!chezscheme #%car"))
-(let-values ([(language forms) (read-text "#!test/quote chez-lang/chez $x")])
-  (check "meta-language over chez-lang/chez" '(r6rs ('x))
+  (check "lang/chez forms" '((library (x) (export) (import (rnrs)))) (map syntax->datum forms)))
+(check "lang/chez reads in R6RS mode"
+  '(raised "Exception in reader-read: #% primitive syntax is not allowed in #!r6rs mode \"#%\" at char 12 of text")
+  (forms-of "#!lang/chez\n#%car"))
+(check "lang/chez switches mode with #!chezscheme" '(($primitive car))
+  (forms-of "#!lang/chez\n#!chezscheme #%car"))
+(let-values ([(language forms) (read-text "#!test/quote lang/chez $x")])
+  (check "meta-language over lang/chez" '(r6rs ('x))
     (list (language-mode language) (map syntax->datum forms))))
 
 (let ([meta (make-meta-language values)] [plain (make-plain-language default-readtable (read-mode chez))])

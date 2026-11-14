@@ -1,4 +1,4 @@
-(import (chezscheme) (chez-lang reader))
+(import (chezscheme) (lang reader))
 
 (include "differential.ss")
 

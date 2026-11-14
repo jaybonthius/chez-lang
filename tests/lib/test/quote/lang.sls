@@ -1,6 +1,6 @@
 (library (test quote lang)
   (export language)
-  (import (chezscheme) (chez-lang reader) (chez-lang language))
+  (import (chezscheme) (lang reader) (lang language))
 
   (define (read-quoted r char start)
     (let ([datum (reader-read r)])

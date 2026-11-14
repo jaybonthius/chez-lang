@@ -1,6 +1,6 @@
-(library (chez-lang reload)
+(library (lang reload)
   (export reload-library)
-  (import (chezscheme) (only (chez-lang language) call-with-library-lock))
+  (import (chezscheme) (only (lang language) call-with-library-lock))
 
   (define-record-type target
     (nongenerative)
